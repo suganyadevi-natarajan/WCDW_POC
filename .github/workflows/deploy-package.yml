@@ -1,10 +1,11 @@
 # Reusable workflow: deploys a delta package to one Databricks environment.
 # Called by package-and-deploy.yml for SIT, UAT and PROD.
 #
-# Each GitHub Environment (SIT, UAT, PROD) must define:
-#   variables: DATABRICKS_HOST  (e.g. https://adb-123.azuredatabricks.net)
-#              TARGET_PATH      (e.g. /Workspace/Shared/wcdw_poc)
-#   secrets:   DATABRICKS_CLIENT_ID, DATABRICKS_CLIENT_SECRET  (service principal OAuth)
+# Environment details:
+#   SIT       -> host and target path are hardcoded in the "Set environment details" step.
+#   UAT, PROD -> read from GitHub Environment variables DATABRICKS_HOST and TARGET_PATH.
+# Every GitHub Environment (SIT, UAT, PROD) still needs these secrets:
+#   DATABRICKS_CLIENT_ID, DATABRICKS_CLIENT_SECRET  (service principal OAuth)
 name: Deploy package
 
 on:
@@ -22,11 +23,37 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     env:
-      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
       DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
       DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
-      TARGET_PATH: ${{ vars.TARGET_PATH }}
     steps:
+      - name: Set environment details
+        env:
+          TARGET_ENV: ${{ inputs.environment }}
+          VAR_HOST: ${{ vars.DATABRICKS_HOST }}
+          VAR_TARGET_PATH: ${{ vars.TARGET_PATH }}
+        run: |
+          set -euo pipefail
+          case "$TARGET_ENV" in
+            SIT)
+              # Hardcoded for testing: SIT uses the same workspace as dev
+              HOST="https://adb-4330217265748556.16.azuredatabricks.net"
+              TARGET="/Workspace/Shared/wcdw_poc_sit"
+              ;;
+            *)
+              HOST="$VAR_HOST"
+              TARGET="$VAR_TARGET_PATH"
+              ;;
+          esac
+
+          if [ -z "$HOST" ] || [ -z "$TARGET" ]; then
+            echo "::error::DATABRICKS_HOST or TARGET_PATH is not set for $TARGET_ENV"
+            exit 1
+          fi
+
+          echo "DATABRICKS_HOST=$HOST" >> "$GITHUB_ENV"
+          echo "TARGET_PATH=$TARGET" >> "$GITHUB_ENV"
+          echo "$TARGET_ENV -> $HOST : $TARGET"
+
       - name: Download package
         uses: actions/download-artifact@v4
         with:
