@@ -1,0 +1,14 @@
+# WF_CEAS workflow: CEAS extract mappings
+resources:
+  jobs:
+    wf_ceas:
+      name: WF_CEAS
+      tasks:
+        - task_key: s_m_ceas_auth_fac
+          spark_python_task:
+            python_file: ../M_CEAS_AUTH_FAC.py
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: '4'
