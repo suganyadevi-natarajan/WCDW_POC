@@ -1,0 +1,16 @@
+# Declarative Automation Bundle for the WCDW POC (CEAS migration)
+bundle:
+  name: wcdw_poc
+
+include:
+  - resources/*.yml
+
+targets:
+  dev:
+    mode: development
+    default: true
+
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
