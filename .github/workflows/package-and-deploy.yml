@@ -1,0 +1,117 @@
+# Builds a delta package (only the files changed in the latest push) and
+# promotes the same package through SIT -> UAT -> PROD.
+# Triggers: every push to feature-bal-fund, or manually from the Actions tab.
+name: Package and deploy (SIT -> UAT -> PROD)
+
+on:
+  push:
+    branches:
+      - feature-bal-fund
+    paths-ignore:
+      - '.github/**'
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: 'Commit to diff from (leave empty to use the previous commit)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-and-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-package:
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.pkg.outputs.has_changes }}
+      package_name: ${{ steps.pkg.outputs.package_name }}
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build delta package
+        id: pkg
+        env:
+          INPUT_BASE: ${{ github.event.inputs.base_sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          # Work out which commit to compare against
+          if [ -n "${INPUT_BASE:-}" ]; then
+            BASE="$INPUT_BASE"
+          elif [ -n "${PUSH_BEFORE:-}" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            BASE="$PUSH_BEFORE"
+          else
+            BASE=$(git rev-parse HEAD~1)
+          fi
+          echo "Diffing $BASE..$GITHUB_SHA"
+
+          mkdir -p package/files
+          git diff --name-status --no-renames "$BASE" "$GITHUB_SHA" -- . ':(exclude).github' > package/changes.txt
+          cut -f2 <(grep -v '^D' package/changes.txt || true) > package/changed.txt
+          cut -f2 <(grep '^D' package/changes.txt || true) > package/deleted.txt
+
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            mkdir -p "package/files/$(dirname "$f")"
+            cp "$f" "package/files/$f"
+          done < package/changed.txt
+
+          {
+            echo "source_branch=${GITHUB_REF_NAME}"
+            echo "base_commit=${BASE}"
+            echo "head_commit=${GITHUB_SHA}"
+            echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > package/manifest.txt
+
+          echo "Changes in this package:"
+          cat package/changes.txt
+
+          if [ -s package/changed.txt ] || [ -s package/deleted.txt ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No changes to package."
+          fi
+          echo "package_name=delta-package-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload package
+        if: steps.pkg.outputs.has_changes == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pkg.outputs.package_name }}
+          path: package/
+          include-hidden-files: true
+          retention-days: 30
+
+  deploy-sit:
+    needs: build-package
+    if: needs.build-package.outputs.has_changes == 'true'
+    uses: ./.github/workflows/deploy-package.yml
+    with:
+      environment: SIT
+      package_name: ${{ needs.build-package.outputs.package_name }}
+    secrets: inherit
+
+  deploy-uat:
+    needs: [build-package, deploy-sit]
+    uses: ./.github/workflows/deploy-package.yml
+    with:
+      environment: UAT
+      package_name: ${{ needs.build-package.outputs.package_name }}
+    secrets: inherit
+
+  deploy-prod:
+    needs: [build-package, deploy-uat]
+    uses: ./.github/workflows/deploy-package.yml
+    with:
+      environment: PROD
+      package_name: ${{ needs.build-package.outputs.package_name }}
+    secrets: inherit
