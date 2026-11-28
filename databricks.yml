@@ -10,6 +10,22 @@ targets:
     mode: development
     default: true
 
+  # SIT / UAT / PROD: deployed by CI (GitHub Actions) as a service principal.
+  # The workspace host comes from the DATABRICKS_HOST variable of the matching
+  # GitHub Environment. To pin it here instead, add `host: https://<workspace-url>`
+  # under `workspace:` for each target.
+  sit:
+    mode: production
+    workspace:
+      # Testing: SIT uses the same workspace as dev
+      host: https://adb-4330217265748556.16.azuredatabricks.net
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+
+  uat:
+    mode: production
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+
   prod:
     mode: production
     workspace:
