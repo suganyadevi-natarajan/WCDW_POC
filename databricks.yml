@@ -19,7 +19,8 @@ targets:
     workspace:
       # Testing: SIT uses the same workspace as dev
       host: https://adb-4330217265748556.16.azuredatabricks.net
-      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+      # Testing: deploy SIT into the SIT folder inside this Git folder
+      root_path: /Workspace/Users/suganyadevi.natarajan@kumaran.world/wcdw_migration_project/WCDW_POC/SIT
 
   uat:
     mode: production

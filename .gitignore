@@ -1,0 +1,5 @@
+# Deployed SIT copy (written by CI / bundle deploy, not source)
+SIT/
+
+# Local bundle state
+.databricks/

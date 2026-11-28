@@ -37,7 +37,7 @@ jobs:
             SIT)
               # Hardcoded for testing: SIT uses the same workspace as dev
               HOST="https://adb-4330217265748556.16.azuredatabricks.net"
-              TARGET="/Workspace/Shared/wcdw_poc_sit"
+              TARGET="/Workspace/Users/suganyadevi.natarajan@kumaran.world/wcdw_migration_project/WCDW_POC/SIT"
               ;;
             *)
               HOST="$VAR_HOST"
